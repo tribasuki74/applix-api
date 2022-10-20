@@ -3,11 +3,14 @@ import env_lab
 import requests
 from requests.auth import HTTPBasicAuth
 import urllib3
-from model import Login
+from model import Login, Customer
 import psutil
 import os
+import time
+from decode import DecodeToken
+import json
 
-app = FastAPI()-
+app = FastAPI()
 
 @app.get("/")
 async def root():
@@ -63,20 +66,123 @@ def get_token(host=env_lab.DNA_CENTER['host'],
 async def statistic():
     stats = psutil.virtual_memory()  # returns a named tuple
     available = getattr(stats, 'available')
-    ram_free = round(available / 1048576, 2)
+    ram_free = str(int(round(available / 1048576, 0)))
 
-    uptime = "XX:XX:XX:XX"
+    totalSeconds = time.time() - psutil.boot_time()
+    seconds = int(totalSeconds % 60);
+    minutes = int((totalSeconds % 3600) / 60);
+    hours = int((totalSeconds % 86400) / 3600);
+    days = int((totalSeconds % (86400 * 30)) / 86400);
+
+    uptime = "{:02d}:{:02d}:{:02d}:{:02d}".format(days, hours, minutes, seconds)
     pid = os.getpid()
 
-    p = next((proc for proc in psutil.process_iter() if proc.pid == pid),None)
+    p = next((proc for proc in psutil.process_iter() if proc.pid == pid), None)
     prio = p.nice()
-
-    proc = "X"
+ 
+    proc = str(sum(1 for proc in psutil.process_iter()))
+ 
     data = {
         "ram_free": ram_free,
         "uptime": uptime,
-        "api_pid": pid,
+        "api_pid": str(pid),
         "api_prio": prio,
         "total_proc": proc
     }
     return data, 200
+
+@app.get("/whoami")
+async def whoami(token: str):
+    decode = DecodeToken.decode(token)
+    response = {"username": decode['username'] }
+    return response, 200
+
+@app.put("/customers/")
+async def addNewCustomer(customer: Customer):
+    if checkUnique(customer):
+        # save into customers.csv
+        response = saveNewCustomer(customer)
+        return response, 200
+    else:
+        return {"message": "HTTP Forbidden error" }, 403
+
+def saveNewCustomer(customer):
+    customers = []
+    with open("data/customers.json") as data:
+        json_data = data.read()
+        customers = json.loads(json_data)
+    customer = {
+        "name": customer.name,
+        "domain_prefix": customer.domain_prefix,
+        "username": customer.username,
+        "password": customer.password,
+        "message": customer.message
+    }
+    customers.append(customer)
+    with open("data/customers.json", "w") as fh: 
+        json.dump(customers, fh, indent = 4)
+    return customer
+
+def checkUnique(customer):
+    with open("data/customers.json") as data:
+        json_data = data.read()
+        customers = json.loads(json_data)
+        print(customers)
+        name = customer.name
+        dp = customer.domain_prefix
+        un = customer.username
+
+        unique = True
+        for cust in customers:
+            if (name == cust['name']) | (dp == cust['domain_prefix']) | \
+                (un == cust['username']):
+                unique = False
+                break
+    return unique
+
+@app.get("/network/devices/stats")
+async def getDeviceStatistic(token: str, management_ip: str = ""):
+    host = env_lab.DNA_CENTER['host']
+    port = env_lab.DNA_CENTER['port']
+    # if management_ip is null 
+    #     call all device list
+    # else
+    #     call specific device with management_ip
+
+    #     get each device_id
+    #     call all interface
+    # combine result then return back
+    if management_ip == "":
+        url = "https://{}:{}/api/v1/network-device".format(host,port)
+    else:
+        url = "https://{}:{}/api/v1/network-device?managementIpAddress={}" \
+            .format(host,port,management_ip)
+    hdr = {'x-auth-token': token, 'content-type' : 'application/json'}
+    resp = requests.get(url, headers=hdr, verify=False)  # Make the Get Request
+    device_list = resp.json()
+    devices = []
+    for deviceItem in device_list:
+        deviceId = device["id"]
+        interfaces = []
+        # call interface based on device id
+        url = "https://{}:{}/api/v1/interface?deviceId={}".format(host,port,deviceId)
+        hdr = {'x-auth-token': token, 'content-type' : 'application/json'}
+        resp = requests.get(url, headers=hdr, verify=False)  # Make the Get Request
+        interface_info_list = resp.json()
+        for interfaceItem in interface_info_list:
+            interface = {
+                "name": interfaceItem["portName"],
+                "mac": interfaceItem["macAddress"],
+                "ip": interfaceItem["ipv4Address"],
+                "pkts-in": interfaceItem[""],
+                
+            }
+            interfaces.append(interface)
+        device = {
+            "hostname": deviceItem["hostname"],
+            "management_ip": deviceItem["managementIpAddress"],
+            "ios_version": deviceItem["softwareVersion"]
+            "interfaces": interfaces
+        }
+        devices.append(device)
+    return {"devices": devices}, 200
