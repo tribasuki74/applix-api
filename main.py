@@ -152,40 +152,44 @@ async def getDeviceStatistic(token: str, management_ip: str = ""):
     hdr = {'x-auth-token': token, 'content-type' : 'application/json'}
     resp = requests.get(url, headers=hdr, verify=False)  # Make the Get Request
     device_list = resp.json()["response"]
-    print(device_list)
     devices = []
-    for deviceItem in device_list:
-        print(deviceItem)
-        deviceId = deviceItem["id"]
-        interfaces = []
-        # call interface based on device id
-        url = "https://{}:{}/api/v1/interface?deviceId={}".format(host,port,deviceId)
-        hdr = {'x-auth-token': token, 'content-type' : 'application/json'}
-        resp = requests.get(url, headers=hdr, verify=False)  # Make the Get Request
-        interface_info_list = resp.json()['response']
-        for interfaceItem in interface_info_list:
-            if "in-unicast-pkts" in interfaceItem:
-                pktsIn = interfaceItem["in-unicast-pkts"]
-            else:
-                pktsIn = "None"
-            if "out-unicast-pkts" in interfaceItem:
-                pktsOut = interfaceItem["out-unicast-pkts"]
-            else:
-                pktsOut = "None"
+    if len(device_list) > 0:
+        for deviceItem in device_list:
+            print(deviceItem)
+            deviceId = deviceItem["id"]
+            interfaces = []
+            # call interface based on device id
+            url = "https://{}:{}/api/v1/interface?deviceId={}".format(host,port,deviceId)
+            hdr = {'x-auth-token': token, 'content-type' : 'application/json'}
+            resp = requests.get(url, headers=hdr, verify=False)  # Make the Get Request
+            interface_info_list = resp.json()['response']
+            for interfaceItem in interface_info_list:
+                if "in-unicast-pkts" in interfaceItem:
+                    pktsIn = interfaceItem["in-unicast-pkts"]
+                else:
+                    pktsIn = "None"
+                if "out-unicast-pkts" in interfaceItem:
+                    pktsOut = interfaceItem["out-unicast-pkts"]
+                else:
+                    pktsOut = "None"
 
-            interface = {
-                "name": interfaceItem["portName"],
-                "mac": interfaceItem["macAddress"],
-                "ip": interfaceItem["ipv4Address"],
-                "pkts-in": pktsIn,
-                "pkts-out": pktsOut
+                interface = {
+                    "name": interfaceItem["portName"],
+                    "mac": interfaceItem["macAddress"],
+                    "ip": interfaceItem["ipv4Address"],
+                    "pkts-in": pktsIn,
+                    "pkts-out": pktsOut
+                }
+                interfaces.append(interface)
+            device = {
+                "hostname": deviceItem["hostname"],
+                "management_ip": deviceItem["managementIpAddress"],
+                "ios_version": deviceItem["softwareVersion"],
+                "interfaces": interfaces
             }
-            interfaces.append(interface)
-        device = {
-            "hostname": deviceItem["hostname"],
-            "management_ip": deviceItem["managementIpAddress"],
-            "ios_version": deviceItem["softwareVersion"],
-            "interfaces": interfaces
-        }
-        devices.append(device)
+            devices.append(device)
+    else:
+        response = {"mesage": "HTTP not found error"}
+        return response, 200
+
     return {"devices": devices}, 200
