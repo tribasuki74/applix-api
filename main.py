@@ -166,12 +166,15 @@ async def getDeviceStatistic(token: str, management_ip: str = ""):
             for interfaceItem in interface_info_list:
                 if "in-unicast-pkts" in interfaceItem:
                     pktsIn = interfaceItem["in-unicast-pkts"]
+                    if pktsIn == "":
+                        pktsIn = "Null"
                 else:
-                    pktsIn = "None"
+                    pktsIn = "N/A"
                 if "out-unicast-pkts" in interfaceItem:
                     pktsOut = interfaceItem["out-unicast-pkts"]
+                    pktsOut = "Null"
                 else:
-                    pktsOut = "None"
+                    pktsOut = "N/A"
 
                 interface = {
                     "name": interfaceItem["portName"],
